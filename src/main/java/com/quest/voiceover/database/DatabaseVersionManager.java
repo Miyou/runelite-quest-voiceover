@@ -51,7 +51,9 @@ public class DatabaseVersionManager {
 
     public static void prepareDatabaseSource(OkHttpClient okHttpClient) {
         ensureDownloadDirectoryExists();
-        downloadOrUpdateDatabase(okHttpClient);
+        // Auto-update disabled to preserve custom voiceovers
+        // downloadOrUpdateDatabase(okHttpClient);
+        log.info("Database auto-update disabled - using local database with custom voiceovers");
     }
 
     private static String getDatabaseVersion() {

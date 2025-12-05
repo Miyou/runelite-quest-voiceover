@@ -36,18 +36,14 @@ In this repository contains the tools to contribute!
 This can be done by using our `voiceover_cli` tool to generate all the sound bites automatically for a given quest.
 
 ### Requirements
-- Python 3.8+
-- Poetry - https://python-poetry.org/docs/
+- Python 3.12+
+- uv - https://docs.astral.sh/uv/
 - Elevenlabs Account - https://elevenlabs.io/app
 
-### installation
-1. Make a python virtual environment with poetry.
+### Installation
+1. Install dependencies with uv (this will automatically create a virtual environment).
 ```bash
-poetry shell
-```
-2. Install the required packages.
-```bash
-poetry install
+uv sync
 ```
 3. Copy the .env.example file to .env and fill in your ElevenLabs API Key (You can skip this step if you want to CLI to automate it).
 ```bash
@@ -57,9 +53,9 @@ cp .env.example .env
 ### Usage
 1. In Elevenlabs, create a voice for each specific character in the quest, you can do this by searching for a suitable voice from their voice library or making your own. <br>
    **Note: To keep the voice actors consistent, the player dialog lines will always be voiced by the default `Chris` voice!**
-2. To use the interactive cli tool, run the following command:
+2. To use the interactive CLI tool, run the following command:
 ```bash
-python cli-main.py
+uv run python cli-main.py
 ```
 
 3. An interactive cli tool should open for you to generate the sounds, read through the instructions and generate the transcript voiceover!

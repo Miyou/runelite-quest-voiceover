@@ -8,3 +8,9 @@ nbactions.xml
 nb-configuration.xml
 nbproject/
 voiceover_output/
+.DS_Store
+output_voiceover/
+**/__pycache__/
+*.log
+.env
+quest_voiceover.db

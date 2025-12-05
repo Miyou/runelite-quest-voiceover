@@ -82,15 +82,18 @@ public class QuestVoiceoverPlugin extends Plugin
 			}
 
 			MessageUtils message = new MessageUtils(chatMessage.getMessage(), this.playerName);
+			log.info("Dialog received - Character: '{}', Text: '{}'", message.name, message.text);
 
 			try (PreparedStatement statement = databaseManager.prepareStatement("SELECT quest, uri FROM dialogs WHERE character = ? AND text MATCH ?")) {
 				statement.setString(1, message.name.replace("'", "''"));
 				statement.setString(2, message.text.replace("'", "''"));
+				log.info("Query params - Character: '{}', Text: '{}'", message.name.replace("'", "''"), message.text.replace("'", "''"));
 
 				try (ResultSet resultSet = statement.executeQuery()) {
 					if (resultSet.next()) {
 						String fileName = resultSet.getString("uri");
 						String questName = resultSet.getString("quest");
+						log.info("Match found! Quest: '{}', URI: '{}'", questName, fileName);
 
 						this.questName = questName;
 
@@ -99,6 +102,8 @@ public class QuestVoiceoverPlugin extends Plugin
 							soundEngine.play(fileName);
 							return;
 						}
+					} else {
+						log.info("No match found in database");
 					}
 				}
 				isQuestDialog = false;

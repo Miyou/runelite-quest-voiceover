@@ -31,32 +31,32 @@ class ElevenlabsSDK:
 
         if not os.path.exists(file_path):
             try:
-                request_options = {
-                    "additional_body_parameters": {
-                        "previous_text": None if previous_line == None else utils.remove_special_characters(previous_line),
-                        "next_text": None if next_line == None else utils.remove_special_characters(next_line),
-                    }
-                }
+                # request_options with previous/next text not supported in current SDK version
+                # request_options = {
+                #     "additional_body_parameters": {
+                #         "previous_text": None if previous_line == None else utils.remove_special_characters(previous_line),
+                #         "next_text": None if next_line == None else utils.remove_special_characters(next_line),
+                #     }
+                # }
 
-                with open("../pronunciation_dictionary.pls", "rb") as f:
-                    pronunciation_dictionary: AddPronunciationDictionaryResponseModel = self.client.pronunciation_dictionary.add_from_file(
-                        file=f.read(), name="example"
-                    )
+                # Pronunciation dictionary disabled - not available in current SDK version
+                # with open("pronunciation_dictionary.pls", "rb") as f:
+                #     pronunciation_dictionary: AddPronunciationDictionaryResponseModel = self.client.pronunciation_dictionary.add_from_file(
+                #         file=f.read(), name="example"
+                #     )
                 
-                audio = self.client.generate(text=utils.remove_special_characters(line.strip()), 
-                                             voice=Voice(
-                                                 voice_id=voice_id,
-                                                 settings=VoiceSettings(stability=0.3, style=0.4, similarity_boost=0.7),
-                                             ),
-                                             model="eleven_multilingual_v2", 
-                                             output_format="mp3_44100_96",
-                                             request_options=request_options,
-                                                 pronunciation_dictionary_locators=[
-                                                    PronunciationDictionaryVersionLocator(
-                                                        pronunciation_dictionary_id=pronunciation_dictionary.id,
-                                                        version_id=pronunciation_dictionary.version_id,
-                                                    )
-                                                ])
+                audio = self.client.text_to_speech.convert(
+                    text=utils.remove_special_characters(line.strip()),
+                    voice_id=voice_id,
+                    model_id="eleven_multilingual_v2",
+                    voice_settings=VoiceSettings(stability=0.3, style=0.4, similarity_boost=0.7)
+                )
+                                                 # pronunciation_dictionary_locators=[
+                                                 #    PronunciationDictionaryVersionLocator(
+                                                 #        pronunciation_dictionary_id=pronunciation_dictionary.id,
+                                                 #        version_id=pronunciation_dictionary.version_id,
+                                                 #    )
+                                                 # ])
                 
                 save(audio, file_path)
 

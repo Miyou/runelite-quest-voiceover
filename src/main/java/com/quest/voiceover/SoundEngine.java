@@ -33,16 +33,29 @@ public class SoundEngine {
         stopPlayback();
         MP3Player player = getPlayer();
 
-        assert RAW_GITHUB_SOUND_BRANCH_URL != null;
-        HttpUrl httpUrl = RAW_GITHUB_SOUND_BRANCH_URL.newBuilder().addPathSegment(fileName).build();
-        URL soundUrl = httpUrl.url();
+        try {
+            // Load MP3 from local directory instead of GitHub
+            java.nio.file.Path localPath = com.quest.voiceover.database.DatabaseVersionManager.getResourcePath()
+                .getParent()
+                .resolve(fileName);
 
-        player.setVolume(config.mute() ? 0 : config.volume());
-        player.add(soundUrl);
+            if (!java.nio.file.Files.exists(localPath)) {
+                log.warn("MP3 file not found locally, falling back to GitHub: {}", fileName);
+                assert RAW_GITHUB_SOUND_BRANCH_URL != null;
+                HttpUrl httpUrl = RAW_GITHUB_SOUND_BRANCH_URL.newBuilder().addPathSegment(fileName).build();
+                URL soundUrl = httpUrl.url();
+                player.add(soundUrl);
+            } else {
+                player.add(localPath.toFile());
+            }
 
-        player.play();
-        soundPlaying = true;
-        playbackStartTime = client.getTickCount();
+            player.setVolume(config.mute() ? 0 : config.volume());
+            player.play();
+            soundPlaying = true;
+            playbackStartTime = client.getTickCount();
+        } catch (Exception e) {
+            log.error("Failed to play sound: {}", fileName, e);
+        }
     }
 
     public void stop() {
@@ -52,10 +65,13 @@ public class SoundEngine {
     }
 
     private void stopPlayback() {
-        if( player != null && player.isPlaying() ) {
+        if (player != null) {
             soundPlaying = false;
+            // Always clear playlist to prevent old audio from playing
             player.clearPlayList();
-            player.stop();
+            if (player.isPlaying()) {
+                player.stop();
+            }
         }
     }
 
