@@ -48,11 +48,46 @@ import voiceover_cli.wiki_utils as wiki_utils
 
 # ============ Configuration ============
 
+def get_default_voice_for_character(character: str) -> str:
+    """Assign default voice based on character name patterns.
+    
+    Uses simple heuristics to detect likely gender, then assigns
+    a voice using hash-based selection for consistency.
+    """
+    # Common patterns that suggest female characters
+    female_patterns = [
+        'ana', 'irena', 'lady', 'woman', 'girl', 'queen', 
+        'princess', 'duchess', 'sister', 'mother', 'daughter',
+        'wife', 'widow', 'maiden', 'miss', 'mrs', 'ms'
+    ]
+    
+    char_lower = character.lower()
+    is_female = any(pattern in char_lower for pattern in female_patterns)
+    
+    if is_female:
+        # Female voices (American English)
+        female_voices = [
+            'af_bella', 'af_jessica', 'af_nicole', 'af_sarah',
+            'af_sky', 'af_river', 'af_heart', 'af_nova'
+        ]
+        # Use hash for consistent assignment across runs
+        return female_voices[hash(character) % len(female_voices)]
+    else:
+        # Male voices (American English)
+        male_voices = [
+            'am_michael', 'am_adam', 'am_liam', 'am_eric',
+            'am_fenrir', 'am_onyx', 'am_puck', 'am_echo'
+        ]
+        return male_voices[hash(character) % len(male_voices)]
+
+
 OUTPUT_DIR = Path("output_voiceover")
 DB_DIR = Path("output_db")
 DB_PATH = DB_DIR / "quest_voiceover.db"
 
-# Kokoro voice mapping for The Tourist Trap characters
+# OPTIONAL: Manual voice mapping overrides (for fine-tuning specific characters)
+# If a character is not in this map, a voice will be assigned automatically
+# Example mappings for The Tourist Trap:
 VOICE_MAP = {
     # Female characters
     'Irena': 'af_jessica',
@@ -236,7 +271,11 @@ class KokoroTTS:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Generate voiceovers for The Tourist Trap using Kokoro TTS (free!)'
+        description='Generate quest voiceovers using Kokoro TTS (free!)'
+    )
+    parser.add_argument(
+        '--quest', type=str,
+        help='Quest name to generate voiceovers for (e.g., "The Tourist Trap"). If not provided, will prompt interactively.'
     )
     parser.add_argument(
         '--start-line', type=int, default=0,
@@ -245,6 +284,10 @@ def main():
     parser.add_argument(
         '--list-voices', action='store_true',
         help='List available voices and exit'
+    )
+    parser.add_argument(
+        '--list-quests', action='store_true',
+        help='List all available quests and exit'
     )
     args = parser.parse_args()
 
@@ -260,41 +303,74 @@ def main():
                 print(f"  {vid}: {name}")
         return
 
+    # Get list of quests
+    print("Fetching available quests from wiki...")
+    quests = wiki_utils.get_quests()
+    print(f"Found {len(quests)} quests with transcripts\n")
+
+    if args.list_quests:
+        print("Available quests:\n")
+        for i, quest in enumerate(quests, 1):
+            # Remove 'Transcript:' prefix for cleaner display
+            title = quest['title'].replace('Transcript:', '').strip()
+            print(f"  {i}. {title}")
+        return
+
+    # Determine which quest to process
+    if args.quest:
+        quest_query = args.quest.lower()
+        quest = next((q for q in quests if quest_query in q['title'].lower()), None)
+        
+        if not quest:
+            print(f"ERROR: Could not find quest matching: {args.quest}\n")
+            print("Available quests (showing first 20):")
+            for i, q in enumerate(quests[:20], 1):
+                title = q['title'].replace('Transcript:', '').strip()
+                print(f"  {i}. {title}")
+            print("\nUse --list-quests to see all available quests")
+            sys.exit(1)
+    else:
+        # Interactive mode - show some quests and prompt
+        print("No quest specified. Here are some available quests:\n")
+        for i, q in enumerate(quests[:10], 1):
+            title = q['title'].replace('Transcript:', '').strip()
+            print(f"  {i}. {title}")
+        print("\n... and more. Use --list-quests to see all.\n")
+        print("Please specify a quest with --quest <name>")
+        sys.exit(0)
+    
+    # Extract clean quest name for display
+    quest_name = quest['title'].replace('Transcript:', '').strip()
+    
     print("=" * 50)
     print("Kokoro TTS Voiceover Generator")
-    print("The Tourist Trap Quest")
+    print(f"{quest_name}")
     print("=" * 50)
     print("\n💡 Using Kokoro TTS - completely FREE!\n")
 
     # Get transcript
     print("Fetching quest transcript from wiki...")
     
-    # Get quest from wiki
-    quests = wiki_utils.get_quests()
-    tourist_trap = next((q for q in quests if 'tourist trap' in q['title'].lower()), None)
-    
-    if not tourist_trap:
-        print("ERROR: Could not find The Tourist Trap quest")
-        sys.exit(1)
-    
     # Get characters and transcript
-    characters = wiki_utils.get_quest_characters(tourist_trap['link'])
-    transcript_data = wiki_utils.get_transcript(tourist_trap['link'], characters)
+    characters = wiki_utils.get_quest_characters(quest['link'])
+    transcript_data = wiki_utils.get_transcript(quest['link'], characters)
     transcript = transcript_data['flattened_transcript']
 
     print(f"Found {len(transcript)} dialog lines")
     print(f"Characters: {', '.join(set(c for c, _ in transcript))}\n")
 
-    # Show voice assignments
-    print("Voice assignments:")
-    female_chars = {'Irena', 'Ana', 'Ana (in a Barrel)', 'Ana-in-barrel', 'Ana (in-a-barrel),'}
+    # Assign voices dynamically
+    print("Voice assignments (auto-assigned):")
+    voice_assignments = {}
     for char in set(c for c, _ in transcript):
+        # Check if character has manual override in VOICE_MAP (legacy support)
         if char in VOICE_MAP:
             voice = VOICE_MAP[char]
-            gender = "F" if char in female_chars else "M"
-            print(f"  [{gender}] {char} → {voice}")
+            print(f"  [MANUAL] {char} → {voice}")
         else:
-            print(f"  [?] {char} → NO VOICE ASSIGNED")
+            voice = get_default_voice_for_character(char)
+            print(f"  [AUTO] {char} → {voice}")
+        voice_assignments[char] = voice
 
     # Initialize TTS early to catch any errors before we start
     print("\nInitializing Kokoro TTS...")
@@ -325,17 +401,18 @@ def main():
     errors = 0
 
     for idx, (character, text) in enumerate(tqdm(transcript, desc="Generating")):
-        if character not in VOICE_MAP:
+        if character not in voice_assignments:
+            tqdm.write(f"Warning: No voice assigned for '{character}', skipping")
             skipped += 1
             continue
 
         try:
-            voice_id = VOICE_MAP[character]
+            voice_id = voice_assignments[character]
             file_name = tts.generate(character, voice_id, text)
 
             # Add to database if not exists
             if not dialog_exists(conn, character, text):
-                insert_dialog(conn, "The Tourist Trap", character, text, file_name)
+                insert_dialog(conn, quest_name, character, text, file_name)
 
             generated += 1
 
