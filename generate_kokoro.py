@@ -41,6 +41,10 @@ from tqdm import tqdm
 import requests
 from bs4 import BeautifulSoup
 
+# Add voiceover_cli to path for wiki_utils
+sys.path.insert(0, str(Path(__file__).parent))
+import voiceover_cli.wiki_utils as wiki_utils
+
 
 # ============ Configuration ============
 
@@ -98,63 +102,6 @@ AVAILABLE_VOICES = {
 }
 
 
-# ============ Wiki Scraping ============
-
-WIKI_BASE = "https://oldschool.runescape.wiki"
-
-def get_quest_transcript_url():
-    """Get the URL for The Tourist Trap transcript."""
-    return f"{WIKI_BASE}/w/Transcript:The_Tourist_Trap"
-
-
-HEADERS = {
-    'User-Agent': 'QuestVoiceoverBot/1.0 (https://github.com/runelite-quest-voiceover)'
-}
-
-def get_quest_characters(url: str) -> list[str]:
-    """Extract character names from quest transcript page."""
-    response = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(response.content, 'html.parser')
-
-    # Find the content div using CSS selector
-    transcript_list = soup.select_one('div.mw-parser-output')
-    if not transcript_list:
-        transcript_list = soup.select_one('#mw-content-text')
-    if not transcript_list:
-        raise Exception("Dialog list not found")
-
-    characters = []
-    for elem in transcript_list.find_all('li'):
-        if elem.name == 'li' and elem.find('b', recursive=False):
-            character = elem.find('b', recursive=False).text.strip().replace(":", "")
-            if character not in characters:
-                characters.append(character)
-
-    return characters
-
-
-def get_transcript(url: str, characters: list[str]) -> list[tuple[str, str]]:
-    """Extract dialogue lines from quest transcript page."""
-    response = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(response.content, 'html.parser')
-
-    # Find the content div using CSS selector
-    transcript_list = soup.select_one('div.mw-parser-output')
-    if not transcript_list:
-        transcript_list = soup.select_one('#mw-content-text')
-    if not transcript_list:
-        raise Exception("Dialog list not found")
-
-    lines = []
-    for elem in transcript_list.find_all('li'):
-        if elem.name == 'li' and elem.find('b', recursive=False):
-            character = elem.find('b', recursive=False).extract().text.strip().replace(":", "")
-            if character not in characters:
-                continue
-            line = elem.get_text(strip=True, separator=' ')
-            lines.append((character, line))
-
-    return lines
 
 
 # ============ Database ============
@@ -321,9 +268,19 @@ def main():
 
     # Get transcript
     print("Fetching quest transcript from wiki...")
-    url = get_quest_transcript_url()
-    characters = get_quest_characters(url)
-    transcript = get_transcript(url, characters)
+    
+    # Get quest from wiki
+    quests = wiki_utils.get_quests()
+    tourist_trap = next((q for q in quests if 'Tourist Trap' in q['title']), None)
+    
+    if not tourist_trap:
+        print("ERROR: Could not find The Tourist Trap quest")
+        sys.exit(1)
+    
+    # Get characters and transcript
+    characters = wiki_utils.get_quest_characters(tourist_trap['link'])
+    transcript_data = wiki_utils.get_transcript(tourist_trap['link'], characters)
+    transcript = transcript_data['flattened_transcript']
 
     print(f"Found {len(transcript)} dialog lines")
     print(f"Characters: {', '.join(set(c for c, _ in transcript))}\n")
