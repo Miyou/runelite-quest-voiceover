@@ -4,6 +4,9 @@ from typing import TypedDict, List
 
 QUESTS_TRANSCRIPT_WIKI_URL = "https://oldschool.runescape.wiki/w/Category:Quest_transcript"
 QUEST_TRANSCRIPT_WIKI_BASE_URL = "https://oldschool.runescape.wiki"
+HEADERS = {
+    'User-Agent': 'QuestVoiceoverBot/1.0 (https://github.com/Miyou/runelite-quest-voiceover)'
+}
 
 class QuestTranscriptMetadata(TypedDict):
     idx: int
@@ -17,7 +20,7 @@ class QuestTranscript(TypedDict):
 
 
 def get_quests() -> List[QuestTranscriptMetadata]:
-    response = requests.get(QUESTS_TRANSCRIPT_WIKI_URL)
+    response = requests.get(QUESTS_TRANSCRIPT_WIKI_URL, headers=HEADERS)
     soup = BeautifulSoup(response.content, 'html.parser')
     
     quest_transcripts_list: List[QuestTranscriptMetadata] = []
@@ -33,7 +36,7 @@ def get_quests() -> List[QuestTranscriptMetadata]:
 
 
 def get_transcript(url: str, characters: list[str]) -> QuestTranscript:
-    response = requests.get(url)
+    response = requests.get(url, headers=HEADERS)
     soup = BeautifulSoup(response.content, 'html.parser')
 
     transcript_list = soup.find('div', class_='mw-parser-output')
@@ -60,7 +63,7 @@ def get_transcript(url: str, characters: list[str]) -> QuestTranscript:
     return {'transcript': transcript, 'flattened_transcript': flatten_transcript}
 
 def get_quest_characters(url) -> List[str]:
-    response = requests.get(url)
+    response = requests.get(url, headers=HEADERS)
     soup = BeautifulSoup(response.content, 'html.parser')
 
     transcript_list = soup.find('div', class_='mw-parser-output')

@@ -271,7 +271,7 @@ def main():
     
     # Get quest from wiki
     quests = wiki_utils.get_quests()
-    tourist_trap = next((q for q in quests if 'Tourist Trap' in q['title']), None)
+    tourist_trap = next((q for q in quests if 'tourist trap' in q['title'].lower()), None)
     
     if not tourist_trap:
         print("ERROR: Could not find The Tourist Trap quest")
