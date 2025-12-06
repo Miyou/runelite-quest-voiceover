@@ -48,37 +48,35 @@ import voiceover_cli.wiki_utils as wiki_utils
 
 # ============ Configuration ============
 
-def get_default_voice_for_character(character: str) -> str:
-    """Assign default voice based on character name patterns.
-    
-    Uses simple heuristics to detect likely gender, then assigns
-    a voice using hash-based selection for consistency.
+# Voice pools for gender-based assignment
+FEMALE_VOICES = [
+    'af_bella', 'af_jessica', 'af_nicole', 'af_sarah',
+    'af_sky', 'af_river', 'af_heart', 'af_nova'
+]
+
+MALE_VOICES = [
+    'am_michael', 'am_adam', 'am_liam', 'am_eric',
+    'am_fenrir', 'am_onyx', 'am_puck', 'am_echo'
+]
+
+
+def get_voice_for_character(character: str, gender: str | None) -> str:
+    """Assign voice based on character gender from wiki.
+
+    Uses hash-based selection for consistent voice assignment across runs.
+
+    Args:
+        character: Character name (used for consistent hash-based selection)
+        gender: 'male', 'female', or None (defaults to male if unknown)
+
+    Returns:
+        Voice ID string
     """
-    # Common patterns that suggest female characters
-    female_patterns = [
-        'ana', 'irena', 'lady', 'woman', 'girl', 'queen', 
-        'princess', 'duchess', 'sister', 'mother', 'daughter',
-        'wife', 'widow', 'maiden', 'miss', 'mrs', 'ms'
-    ]
-    
-    char_lower = character.lower()
-    is_female = any(pattern in char_lower for pattern in female_patterns)
-    
-    if is_female:
-        # Female voices (American English)
-        female_voices = [
-            'af_bella', 'af_jessica', 'af_nicole', 'af_sarah',
-            'af_sky', 'af_river', 'af_heart', 'af_nova'
-        ]
-        # Use hash for consistent assignment across runs
-        return female_voices[hash(character) % len(female_voices)]
+    if gender == 'female':
+        return FEMALE_VOICES[hash(character) % len(FEMALE_VOICES)]
     else:
-        # Male voices (American English)
-        male_voices = [
-            'am_michael', 'am_adam', 'am_liam', 'am_eric',
-            'am_fenrir', 'am_onyx', 'am_puck', 'am_echo'
-        ]
-        return male_voices[hash(character) % len(male_voices)]
+        # Default to male voice if gender is unknown or male
+        return MALE_VOICES[hash(character) % len(MALE_VOICES)]
 
 
 OUTPUT_DIR = Path("output_voiceover")
@@ -86,29 +84,10 @@ DB_DIR = Path("output_db")
 DB_PATH = DB_DIR / "quest_voiceover.db"
 
 # OPTIONAL: Manual voice mapping overrides (for fine-tuning specific characters)
-# If a character is not in this map, a voice will be assigned automatically
-# Example mappings for The Tourist Trap:
+# If a character is not in this map, voice will be assigned based on wiki gender
 VOICE_MAP = {
-    # Female characters
-    'Irena': 'af_jessica',
-    'Ana': 'af_bella',
-    'Ana (in a Barrel)': 'af_bella',
-    'Ana-in-barrel': 'af_bella',
-    'Ana (in-a-barrel),': 'af_bella',
-
-    # Male characters
-    'Player': 'am_michael',
-    'Mercenary': 'am_fenrir',
-    'Guard': 'am_liam',
-    'Mercenary Captain': 'am_onyx',
-    'Al Shabim': 'am_adam',
-    'Mine cart driver': 'am_puck',
-    'Male slave': 'am_echo',
-    'Escaping slave': 'am_eric',
-    'Rowdy slave': 'am_fenrir',
-    'Bedabin Nomad': 'am_adam',
-    'Captain Siad': 'am_onyx',
-    'Bedabin Nomad Guard': 'am_liam',
+    # Example overrides:
+    # 'Specific Character': 'am_michael',
 }
 
 AVAILABLE_VOICES = {
@@ -320,7 +299,7 @@ def main():
     if args.quest:
         quest_query = args.quest.lower()
         quest = next((q for q in quests if quest_query in q['title'].lower()), None)
-        
+
         if not quest:
             print(f"ERROR: Could not find quest matching: {args.quest}\n")
             print("Available quests (showing first 20):")
@@ -338,10 +317,10 @@ def main():
         print("\n... and more. Use --list-quests to see all.\n")
         print("Please specify a quest with --quest <name>")
         sys.exit(0)
-    
+
     # Extract clean quest name for display
     quest_name = quest['title'].replace('Transcript:', '').strip()
-    
+
     print("=" * 50)
     print("Kokoro TTS Voiceover Generator")
     print(f"{quest_name}")
@@ -350,26 +329,35 @@ def main():
 
     # Get transcript
     print("Fetching quest transcript from wiki...")
-    
+
     # Get characters and transcript
     characters = wiki_utils.get_quest_characters(quest['link'])
     transcript_data = wiki_utils.get_transcript(quest['link'], characters)
     transcript = transcript_data['flattened_transcript']
 
     print(f"Found {len(transcript)} dialog lines")
-    print(f"Characters: {', '.join(set(c for c, _ in transcript))}\n")
 
-    # Assign voices dynamically
-    print("Voice assignments (auto-assigned):")
+    # Get unique characters
+    unique_characters = list(set(c for c, _ in transcript))
+    print(f"Characters: {', '.join(unique_characters)}\n")
+
+    # Fetch character genders from wiki
+    print("Fetching character genders from wiki...")
+    character_genders = wiki_utils.get_characters_genders(unique_characters)
+
+    # Assign voices based on wiki genders
+    print("\nVoice assignments:")
     voice_assignments = {}
-    for char in set(c for c, _ in transcript):
-        # Check if character has manual override in VOICE_MAP (legacy support)
+    for char in unique_characters:
+        # Check if character has manual override in VOICE_MAP
         if char in VOICE_MAP:
             voice = VOICE_MAP[char]
             print(f"  [MANUAL] {char} → {voice}")
         else:
-            voice = get_default_voice_for_character(char)
-            print(f"  [AUTO] {char} → {voice}")
+            gender = character_genders.get(char)
+            voice = get_voice_for_character(char, gender)
+            gender_label = gender if gender else "unknown"
+            print(f"  [WIKI:{gender_label}] {char} → {voice}")
         voice_assignments[char] = voice
 
     # Initialize TTS early to catch any errors before we start
