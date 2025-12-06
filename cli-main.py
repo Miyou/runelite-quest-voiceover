@@ -50,7 +50,7 @@ def prompt_user():
         default_values=quest_characters_array
     ).run()
     if selected_characters is None or len(selected_characters) == 0: return;
-        
+
     # Scrape the OSRS Wiki for the quest transcripts themselves.
     quest_transcript_dict: wiki_utils.QuestTranscript = wiki_utils.get_transcript(quest['link'], selected_characters);
     quest_transcript = quest_transcript_dict['transcript']
@@ -82,32 +82,34 @@ def prompt_user():
         dialog_lines_counter += len(quest_transcript[key])
         selected_voice_name = next(filter(lambda voice: voice.voice_id == selected_voice, voices_list)).name
         confirmation_dialog_info += f"{key}: Voice - {selected_voice_name} | Lines - {len(quest_transcript[key])}\n"
-    
+
     # Confirmation dialog before we generate the voicelines.
+    quest_title = quest['title'].replace("Transcript:", "")
+    quest_link = quest['link']
     confirmed = yes_no_dialog(
-        title=f"Confirm Voiceover Generation: {quest['title'].replace("Transcript:", "")}",
-        text=f'{quest['title'].replace("Transcript:", "")} ({quest["link"]})\n'
+        title=f"Confirm Voiceover Generation: {quest_title}",
+        text=f'{quest_title} ({quest_link})\n'
             f'Total dialog lines: {dialog_lines_counter}\n\n'
             f'Characters:\n'
             f'{confirmation_dialog_info}\n'
             f'By pressing YES you will start the voiceover generation!'
-    ).run() 
+    ).run()
     if confirmed is None or confirmed is False: return
 
     # Show progressbar while generating voicelines with Elevenlabs.
-    progress = tqdm(flatten_quest_transcript, desc=f"Generating {quest['title'].replace("Transcript:", "")} Voiceover")
+    progress = tqdm(flatten_quest_transcript, desc=f"Generating {quest_title} Voiceover")
     for idx, (character, line) in enumerate(progress):
         progress.write(f'[{idx+1}] Current Line: {line}')
 
         previous_line = flatten_quest_transcript[idx-1][1] if idx > 0 else None
         next_line = flatten_quest_transcript[idx-1][1] if idx < len(flatten_quest_transcript)-1 else None
-        
+
         try:
             connection = database.create_connection()
             database.init_virtual_table(connection=connection)
 
-            file_name = elevenlabs.generate(character=character, 
-                                voice_id=character_voices_dict[character], 
+            file_name = elevenlabs.generate(character=character,
+                                voice_id=character_voices_dict[character],
                                 line=line,
                                 next_line=next_line,
                                 previous_line=previous_line)
@@ -116,6 +118,6 @@ def prompt_user():
             database.insert_quest_voiceover(connection=connection, quest=quest['title'].replace("Transcript:", ""), character=character, text=line, file_name=file_name)
         except Exception as e:
             print(f"Error generating voice-over for line '{line}': {e}")
-        
-    
+
+
 prompt_user()

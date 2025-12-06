@@ -15,7 +15,11 @@ dependencies = [
     "prompt-toolkit>=3.0.47",
     "tqdm>=4.66.4",
     "python-dotenv>=1.0.1",
-    # KokoroTTS dependencies (free local TTS)
+]
+
+[project.optional-dependencies]
+# KokoroTTS - use generate_kokoro.py standalone script instead
+kokoro = [
     "kokoro>=0.9.0",
     "scipy>=1.11.0",
     "soundfile>=0.12.1",

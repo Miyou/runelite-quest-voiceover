@@ -52,6 +52,9 @@ public class QuestVoiceoverPlugin extends Plugin
 	private String playerName = null;
 	private Boolean isQuestDialog = false;
 	private String questName = null;
+	// Track the last matched text per character to handle incremental dialog
+	private String lastMatchedCharacter = null;
+	private String lastMatchedText = null;
 
 	@Override
 	protected void startUp() throws Exception
@@ -79,38 +82,104 @@ public class QuestVoiceoverPlugin extends Plugin
 		if (chatMessage.getType().equals(ChatMessageType.DIALOG)) {
 			if (this.playerName == null) {
 				this.playerName = this.client.getLocalPlayer().getName();
+				log.info("Player name set to: '{}'", this.playerName);
 			}
 
-			MessageUtils message = new MessageUtils(chatMessage.getMessage(), this.playerName);
-			log.info("Dialog received - Character: '{}', Text: '{}'", message.name, message.text);
+			String rawMessage = chatMessage.getMessage();
+			log.info("Raw message: '{}'", rawMessage);
+			MessageUtils message = new MessageUtils(rawMessage, this.playerName);
+			log.info("Dialog received - Character: '{}', Text: '{}' (playerName: '{}')", message.name, message.text, this.playerName);
 
-			try (PreparedStatement statement = databaseManager.prepareStatement("SELECT quest, uri FROM dialogs WHERE character = ? AND text MATCH ?")) {
-				statement.setString(1, message.name.replace("'", "''"));
-				statement.setString(2, message.text.replace("'", "''"));
-				log.info("Query params - Character: '{}', Text: '{}'", message.name.replace("'", "''"), message.text.replace("'", "''"));
+			try {
+				String textToSearch = message.text;
 
-				try (ResultSet resultSet = statement.executeQuery()) {
-					if (resultSet.next()) {
-						String fileName = resultSet.getString("uri");
-						String questName = resultSet.getString("quest");
-						log.info("Match found! Quest: '{}', URI: '{}'", questName, fileName);
-
-						this.questName = questName;
-
-						if (fileName != null || questName != null) {
-							isQuestDialog = true;
-							soundEngine.play(fileName);
-							return;
-						}
-					} else {
-						log.info("No match found in database");
+				// Check if this message is an incremental update (starts with the last matched text)
+				// If so, extract just the new part to search for
+				if (lastMatchedCharacter != null && lastMatchedText != null
+						&& message.name.equals(lastMatchedCharacter)
+						&& message.text.startsWith(lastMatchedText)) {
+					// Extract the new portion after the last matched text
+					String remainder = message.text.substring(lastMatchedText.length()).trim();
+					if (!remainder.isEmpty()) {
+						log.info("Detected incremental dialog, searching for remainder: '{}'", remainder);
+						textToSearch = remainder;
 					}
 				}
+
+				// Try to find a match for the text
+				String[] result = findDialogMatch(message.name, textToSearch);
+
+				// If no match found for remainder, try the full text
+				if (result == null && !textToSearch.equals(message.text)) {
+					log.info("No match for remainder, trying full text");
+					result = findDialogMatch(message.name, message.text);
+					if (result != null) {
+						textToSearch = message.text; // Update for tracking
+					}
+				}
+
+				if (result != null) {
+					String fileName = result[0];
+					String matchedQuestName = result[1];
+
+					// Update tracking for incremental dialog detection
+					lastMatchedCharacter = message.name;
+					lastMatchedText = message.text;
+
+					this.questName = matchedQuestName;
+					isQuestDialog = true;
+					soundEngine.play(fileName);
+					return;
+				} else {
+					log.info("No match found in database");
+				}
+
 				isQuestDialog = false;
 			} catch (SQLException e) {
 				log.error("Encountered an SQL error", e);
 			}
 		}
+	}
+
+	/**
+	 * Find a dialog match in the database.
+	 * First tries exact match, then falls back to fuzzy MATCH.
+	 * @return String array [fileName, questName] or null if not found
+	 */
+	private String[] findDialogMatch(String character, String text) throws SQLException {
+		// First try exact match
+		try (PreparedStatement exactStatement = databaseManager.prepareStatement(
+				"SELECT quest, uri FROM dialogs WHERE character = ? AND text = ?")) {
+			exactStatement.setString(1, character);
+			exactStatement.setString(2, text);
+
+			try (ResultSet resultSet = exactStatement.executeQuery()) {
+				if (resultSet.next()) {
+					String fileName = resultSet.getString("uri");
+					String questName = resultSet.getString("quest");
+					log.info("Exact match found! Quest: '{}', URI: '{}'", questName, fileName);
+					return new String[]{fileName, questName};
+				}
+			}
+		}
+
+		// If no exact match, try fuzzy MATCH
+		try (PreparedStatement fuzzyStatement = databaseManager.prepareStatement(
+				"SELECT quest, uri FROM dialogs WHERE character = ? AND text MATCH ?")) {
+			fuzzyStatement.setString(1, character.replace("'", "''"));
+			fuzzyStatement.setString(2, text.replace("'", "''"));
+
+			try (ResultSet resultSet = fuzzyStatement.executeQuery()) {
+				if (resultSet.next()) {
+					String fileName = resultSet.getString("uri");
+					String questName = resultSet.getString("quest");
+					log.info("Fuzzy match found! Quest: '{}', URI: '{}'", questName, fileName);
+					return new String[]{fileName, questName};
+				}
+			}
+		}
+
+		return null;
 	}
 
 	@Subscribe
