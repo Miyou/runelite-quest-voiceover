@@ -79,9 +79,10 @@ def get_voice_for_character(character: str, gender: str | None) -> str:
         return MALE_VOICES[hash(character) % len(MALE_VOICES)]
 
 
-OUTPUT_DIR = Path("output_voiceover")
-DB_DIR = Path("output_db")
-DB_PATH = DB_DIR / "quest_voiceover.db"
+# Output directly to RuneLite plugin directory - no symlinks needed
+RUNELITE_PLUGIN_DIR = Path.home() / ".runelite" / "quest-voiceover"
+OUTPUT_DIR = RUNELITE_PLUGIN_DIR
+DB_PATH = RUNELITE_PLUGIN_DIR / "quest_voiceover.db"
 
 # OPTIONAL: Manual voice mapping overrides (for fine-tuning specific characters)
 # If a character is not in this map, voice will be assigned based on wiki gender
@@ -122,7 +123,7 @@ AVAILABLE_VOICES = {
 
 def init_database():
     """Initialize the SQLite database."""
-    DB_DIR.mkdir(exist_ok=True)
+    RUNELITE_PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -416,10 +417,8 @@ def main():
     print(f"  Generated: {generated}")
     print(f"  Skipped (no voice): {skipped}")
     print(f"  Errors: {errors}")
-    print(f"\n  Audio files: {OUTPUT_DIR}/")
-    print(f"  Database: {DB_PATH}")
-    print("\n💡 To use in RuneLite, copy database to:")
-    print(f"   cp {DB_PATH} ~/.runelite/quest-voiceover/quest_voiceover.db")
+    print(f"\n  Output directory: {RUNELITE_PLUGIN_DIR}/")
+    print("\n💡 Files written directly to RuneLite plugin directory - ready to use!")
 
 
 if __name__ == '__main__':
